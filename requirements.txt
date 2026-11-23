@@ -1,4 +1,3 @@
 flask
 gradio_client
-pydub
-static-ffmpeg
+
