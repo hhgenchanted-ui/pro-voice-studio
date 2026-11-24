@@ -1,3 +1,6 @@
 flask
 gradio_client
+imageio-ffmpeg
+gunicorn
+requests
 
