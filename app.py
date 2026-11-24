@@ -1,4 +1,5 @@
-import os
+
+      import os
 import tempfile
 from flask import Flask, request, send_file, jsonify, render_template_string
 from gradio_client import Client, handle_file
@@ -44,8 +45,8 @@ audio{width:100%;margin-top:10px;border-radius:8px}
 <button class="stop" onclick="eM()">⏹️ حفظ البصمة</button>
 </div>
 <div id="ms" class="st"></div>
-</div>"""
-HTML_PART_2 = """<div class="card">
+</div>
+<div class="card">
 <h2>2️⃣ الدبلجة التمثيلية (تأدية المشاعر بصوتك)</h2>
 <div class="row">
 <button class="rec" onclick="sR()">🔴 ابدأ التمثيل</button>
@@ -72,8 +73,8 @@ HTML_PART_2 = """<div class="card">
 <div id="ts" class="st"></div>
 <audio id="ta" controls></audio>
 <a id="dlT" class="dl" download="cloned_speech.wav">⬇️ حفظ الصوت على الهاتف</a>
-</div>
-<script>
+</div>"""
+HTML_PART_2 = """<script>
 let mRec,mCh=[],aRec,aCh=[],rBlob=null;
 async function askMic(){
   try{
@@ -81,14 +82,14 @@ async function askMic(){
     s.getTracks().forEach(t=>t.stop());
     document.getElementById('micSt').innerText='✅ المايكروفون مفعل وجاهز للتسجيل!';
   }catch(e){
-    document.getElementById('micSt').innerText='⚠️ افتح إعدادات التطبيق/المتصفح واسمح بالمايكروفون';
+    document.getElementById('micSt').innerText='⚠️ افتح إعدادات المتصفح واسمح بالمايكروفون';
   }
 }
 async function upF(){
   let f=document.getElementById('mf').files;
   if(!f.length)return alert('اختر ملف الصوت أولاً');
   document.getElementById('ms').innerText='⏳ جاري رفع وحفظ البصمة...';
-  let r=await fetch('/set_voice',{method:'POST',body:f});
+  let r=await fetch('/set_voice',{method:'POST',body:f[0]});
   let d=await r.json();
   document.getElementById('ms').innerText='✅ '+d.message;
 }
@@ -141,6 +142,7 @@ async function dT(){
   document.getElementById('ts').innerText='✅ تم التوليد بنجاح!';
 }
 </script></body></html>"""
+
 @app.route("/")
 def home():
     return render_template_string(HTML_PART_1 + HTML_PART_2)
@@ -165,23 +167,23 @@ def dub_acting():
     try:
         vc = Client("Plachta/Seed-VC")
         out = vc.predict(
-            source_audio_path=handle_file(tf.name),
-            target_audio_path=handle_file(CLONED_VOICE_FILE),
-            diffusion_steps=25,
-            length_adjust=1.0,
-            inference_cfg_rate=0.7,
-            f0_condition=True,
-            auto_f0_adjust=False,
-            pitch_shift=p,
+            handle_file(tf.name),
+            handle_file(CLONED_VOICE_FILE),
+            25,
+            1.0,
+            0.7,
+            True,
+            False,
+            p,
             api_name="/predict"
         )
         os.remove(tf.name)
-        res = out if isinstance(out, (list, tuple)) else out
+        res = out[0] if isinstance(out, (list, tuple)) else out
         return send_file(res, mimetype="audio/wav")
     except Exception as e:
         if os.path.exists(tf.name):
             os.remove(tf.name)
-        return f"محرك الدبلجة مشغول حالياً، أعد المحاولة: {str(e)}", 500
+        return f"حدث خطأ في الدبلجة: {str(e)}", 500
 
 @app.route("/dub_text", methods=["POST"])
 def dub_text():
@@ -190,26 +192,26 @@ def dub_text():
     t = request.args.get("text", "مرحباً")
     em = request.args.get("emotion", "طبيعي")
     spaces = [
-        ("coqui/xtts", "/predict"),
-        ("tonyassi/voice-clone", "/predict"),
-        ("FunAudioLLM/CosyVoice2-0.5B", "/generate_audio")
+        "tonyassi/voice-clone",
+        "coqui/xtts",
+        "mrfakename/E2-F5-TTS"
     ]
     last_err = ""
-    for sp, api in spaces:
+    for sp in spaces:
         try:
             tc = Client(sp)
-            if "xtts" in sp:
-                out = tc.predict(prompt=t, language="ar", audio_file_pth=handle_file(CLONED_VOICE_FILE), mic_file_path=None, use_mic=False, voice_cleanup=True, no_lang_auto_detect=False, agree=True, api_name=api)
-            elif "tonyassi" in sp:
-                out = tc.predict(text=t, audio=handle_file(CLONED_VOICE_FILE), api_name=api)
+            if "tonyassi" in sp:
+                out = tc.predict(t, handle_file(CLONED_VOICE_FILE), api_name="/predict")
+            elif "xtts" in sp:
+                out = tc.predict(t, "ar", handle_file(CLONED_VOICE_FILE), None, False, True, False, True, api_name="/predict")
             else:
-                out = tc.predict(tts_text=t, mode_checkbox_group="3s极速复刻", prompt_wav_upload=handle_file(CLONED_VOICE_FILE), prompt_wav_record=None, prompt_text="", instruct_text=em, seed=0, stream=False, speed=1, api_name=api)
-            res = out if isinstance(out, (list, tuple)) else out
+                out = tc.predict(handle_file(CLONED_VOICE_FILE), "", t, False, True, 0.15, 32, 1.0, api_name="/basic_tts")
+            res = out[0] if isinstance(out, (list, tuple)) else out
             return send_file(res, mimetype="audio/wav")
         except Exception as e:
             last_err = str(e)
             continue
-    return f"المحركات مشغولة حالياً، حاول بعد دقيقة: {last_err}", 500
+    return f"المحركات مشغولة حالياً، حاول بعد قليل: {last_err}", 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 7860)))
