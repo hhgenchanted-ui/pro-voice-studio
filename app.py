@@ -66,72 +66,33 @@ def clone_voice():
     acting_file.save(raw_act)
 
     try:
-        convert_to_wav(raw_act, act_wav, max_seconds=8)
+        convert_to_wav(raw_act, act_wav, max_seconds=10)
     except Exception as e:
         return jsonify({"error": f"خطأ في تجهيز الصوت: {str(e)}"}), 500
 
-    hf_token = os.environ.get("HF_TOKEN")
-    # قائمة محركات استنساخ الصوت إلى صوت (Zero-shot Voice Conversion)
+    # محركات استنساخ صوت-إلى-صوت تعمل بدون قيود ZeroGPU
     spaces = list((
-        "Plachta/Seed-VC",
-        "myshell-ai/OpenVoiceV2",
-        "amphion/maskgct"
+        "k2-fsa/text-to-speech",
+        "haoheliu/versatile_audio_super_resolution",
+        "Plachta/Seed-VC"
     ))
-    last_error = ""
-
-    for space_name in spaces:
-        try:
-            client = Client(space_name, token=hf_token) if hf_token else Client(space_name)
-            
-            if space_name == "Plachta/Seed-VC":
-                result = client.predict(
-                    handle_file(act_wav),
-                    handle_file(vp_wav),
-                    6,
-                    1.0,
-                    0.7,
-                    True,
-                    True,
-                    0,
-                    api_name="/predict"
-                )
-            elif space_name == "myshell-ai/OpenVoiceV2":
-                # OpenVoiceV2 تحويل نبرة الصوت (Tone Color Converter)
-                result = client.predict(
-                    handle_file(act_wav),
-                    handle_file(vp_wav),
-                    api_name="/change_tone"
-                )
-            else:
-                # البحث التلقائي عن أي مسار دالة متاح في المحرك الثالث
-                info = client.view_api(return_format="dict")
-                eps = list(info.get("named_endpoints", {}).keys())
-                target_ep = eps.pop(0) if eps else "/predict"
-                result = client.predict(
-                    handle_file(vp_wav),
-                    handle_file(act_wav),
-                    api_name=target_ep
-                )
-
-            valid_files = list()
-            items = result if isinstance(result, (list, tuple)) else list((result,))
-            for item in items:
-                if isinstance(item, str) and os.path.exists(item):
-                    valid_files.append(item)
-                elif isinstance(item, dict) and "path" in item and os.path.exists(item.get("path")):
-                    valid_files.append(item.get("path"))
-
-            if valid_files:
-                best_file = max(valid_files, key=lambda f: os.path.getsize(f))
-                final_mp3 = os.path.join(UPLOAD_FOLDER, "cloned_output.mp3")
-                convert_to_mp3(best_file, final_mp3)
-                mp3_kb = round(os.path.getsize(final_mp3) / 1024, 1)
-                return jsonify({"status": "success", "size_kb": mp3_kb})
-        except Exception as e:
-            last_error = f"{space_name}: {str(e)}"
-            continue
-
-    return jsonify({"error": f"المحركات مشغولة حالياً: {last_error[:150]}"}), 503
+    
+    # استخدام محرك FreeVC / KNN-VC (يعمل على المعالج CPU بلا حدود أو حصص يومية)
+    try:
+        client = Client("bshall/knn-vc")
+        result = client.predict(
+            handle_file(act_wav),
+            handle_file(vp_wav),
+            api_name="/predict"
+        )
+        out_file = result if isinstance(result, str) else (result.get("path") if isinstance(result, dict) else result.pop())
+        if out_file and os.path.exists(out_file):
+            final_mp3 = os.path.join(UPLOAD_FOLDER, "cloned_output.mp3")
+            convert_to_mp3(out_file, final_mp3)
+            mp3_kb = round(os.path.getsize(final_mp3) / 1024, 1)
+            return jsonify({"status": "success", "size_kb": mp3_kb})
+    except Exception as e:
+        return jsonify({"error": f"تفاصيل المحرك: {str(e)}"}), 503
 
 @app.route("/get_audio")
 def get_audio():
@@ -142,6 +103,7 @@ def get_audio():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    
     
                 
     
