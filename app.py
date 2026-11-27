@@ -10,7 +10,7 @@ UPLOAD_FOLDER = "temp_audio"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
 
-def convert_to_wav(input_path, output_path, max_seconds=15):
+def convert_to_wav(input_path, output_path, max_seconds=12):
     cmd = list((
         FFMPEG_PATH, "-y", "-i", input_path,
         "-t", str(max_seconds),
@@ -44,7 +44,7 @@ def save_voiceprint():
     wav_path = os.path.join(UPLOAD_FOLDER, "voiceprint.wav")
     file.save(raw_path)
     try:
-        convert_to_wav(raw_path, wav_path, max_seconds=10)
+        convert_to_wav(raw_path, wav_path, max_seconds=8)
         size_kb = round(os.path.getsize(wav_path) / 1024, 1)
         if size_kb < 5:
             return jsonify({"error": "التسجيل قصير جداً أو فارغ"}), 400
@@ -66,22 +66,23 @@ def clone_voice():
     acting_file.save(raw_act)
 
     try:
-        convert_to_wav(raw_act, act_wav, max_seconds=12)
+        convert_to_wav(raw_act, act_wav, max_seconds=10)
     except Exception as e:
         return jsonify({"error": f"خطأ في تجهيز الصوت: {str(e)}"}), 500
 
     hf_token = os.environ.get("HF_TOKEN")
-    # قائمة محركات استنساخ الصوت إلى صوت بالمشاعر (Seed-VC)
-    spaces = list((
-        "Plachta/Seed-VC",
-        "amphion/maskgct",
-        "mrfakename/Amphion-MaskGCT"
+    # محاولة الاتصال بالمفتاح ثم بدون مفتاح على المحرك الرئيسي والنسخ الاحتياطية
+    attempts = list((
+        ("Plachta/Seed-VC", hf_token),
+        ("Plachta/Seed-VC", None),
+        ("amphion/maskgct", hf_token),
+        ("amphion/maskgct", None)
     ))
     last_error = ""
 
-    for space_name in spaces:
+    for space_name, tok in attempts:
         try:
-            client = Client(space_name, token=hf_token)
+            client = Client(space_name, token=tok) if tok else Client(space_name)
             if "Seed-VC" in space_name:
                 result = client.predict(
                     handle_file(act_wav),
@@ -95,14 +96,10 @@ def clone_voice():
                     api_name="/predict"
                 )
             else:
-                # محرك MaskGCT البديل لنقل المشاعر والنبرة
-                info = client.view_api(return_format="dict")
-                endpoints = list(info.get("named_endpoints", {}).keys())
-                target_ep = endpoints.pop(0) if endpoints else "/predict"
                 result = client.predict(
                     handle_file(vp_wav),
                     handle_file(act_wav),
-                    api_name=target_ep
+                    api_name="/voice_conversion"
                 )
 
             valid_files = list()
@@ -123,7 +120,7 @@ def clone_voice():
             last_error = str(e)
             continue
 
-    return jsonify({"error": f"رد المحركات: {last_error}"}), 503
+    return jsonify({"error": f"تعذر الاستنساخ حالياً: {last_error[:140]}"}), 503
 
 @app.route("/get_audio")
 def get_audio():
@@ -134,7 +131,7 @@ def get_audio():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
+                
     
 
         
