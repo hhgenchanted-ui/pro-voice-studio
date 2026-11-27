@@ -56,7 +56,7 @@ def clone_voice():
         result = client.predict(
             handle_file(act_wav),
             handle_file(vp_wav),
-            10,
+            15,
             1.0,
             0.7,
             True,
@@ -65,25 +65,31 @@ def clone_voice():
             api_name="/predict"
         )
         
-        out_file = None
-        if isinstance(result, (list, tuple)):
-            for item in result:
-                if isinstance(item, str) and os.path.exists(item):
-                    out_file = item
-        elif isinstance(result, str):
-            out_file = result
+        # جمع كل المسارات الصالحة واختيار الملف الأكبر حجماً (الصوت الكامل وليس الفارغ)
+        valid_files = []
+        items = result if isinstance(result, (list, tuple)) else [result]
+        for item in items:
+            if isinstance(item, str) and os.path.exists(item):
+                valid_files.append(item)
+            elif isinstance(item, dict) and "path" in item and os.path.exists(item["path"]):
+                valid_files.append(item["path"])
 
-        if not out_file:
-            return jsonify({"error": "لم يتم استلام ملف صوتي من المحرك"}), 500
+        if not valid_files:
+            return jsonify({"error": "لم يتم العثور على ملف صوتي من المحرك"}), 500
+
+        best_file = max(valid_files, key=lambda f: os.path.getsize(f))
+        if os.path.getsize(best_file) < 1000:
+            return jsonify({"error": "الملف الناتج فارغ، تأكد أن صوتك التمثيلي واضح ومسموع"}), 500
 
         final_out = os.path.join(UPLOAD_FOLDER, "cloned_output.wav")
-        shutil.copy(out_file, final_out)
+        convert_to_wav(best_file, final_out, max_seconds=30)
         return send_file(final_out, mimetype="audio/wav")
     except Exception as e:
         return jsonify({"error": f"رد المحرك: {str(e)}"}), 503
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+                                   
         
     
     
