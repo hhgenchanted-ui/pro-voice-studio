@@ -65,23 +65,28 @@ def clone_voice():
     act_wav = os.path.join(UPLOAD_FOLDER, "acting.wav")
     acting_file.save(raw_act)
 
-    hf_token = os.environ.get("HF_TOKEN")
-    spaces = list(("Plachta/Seed-VC", "tonyassi/voice-clone"))
-    last_error = ""
-
     try:
-        convert_to_wav(raw_act, act_wav, max_seconds=15)
+        convert_to_wav(raw_act, act_wav, max_seconds=12)
     except Exception as e:
         return jsonify({"error": f"خطأ في تجهيز الصوت: {str(e)}"}), 500
+
+    hf_token = os.environ.get("HF_TOKEN")
+    # قائمة محركات استنساخ الصوت إلى صوت بالمشاعر (Seed-VC)
+    spaces = list((
+        "Plachta/Seed-VC",
+        "amphion/maskgct",
+        "mrfakename/Amphion-MaskGCT"
+    ))
+    last_error = ""
 
     for space_name in spaces:
         try:
             client = Client(space_name, token=hf_token)
-            if space_name == "Plachta/Seed-VC":
+            if "Seed-VC" in space_name:
                 result = client.predict(
                     handle_file(act_wav),
                     handle_file(vp_wav),
-                    10,
+                    8,
                     1.0,
                     0.7,
                     True,
@@ -90,10 +95,14 @@ def clone_voice():
                     api_name="/predict"
                 )
             else:
+                # محرك MaskGCT البديل لنقل المشاعر والنبرة
+                info = client.view_api(return_format="dict")
+                endpoints = list(info.get("named_endpoints", {}).keys())
+                target_ep = endpoints.pop(0) if endpoints else "/predict"
                 result = client.predict(
-                    handle_file(act_wav),
                     handle_file(vp_wav),
-                    api_name="/predict"
+                    handle_file(act_wav),
+                    api_name=target_ep
                 )
 
             valid_files = list()
@@ -125,7 +134,7 @@ def get_audio():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-    
+
     
 
         
