@@ -65,41 +65,56 @@ def clone_voice():
     act_wav = os.path.join(UPLOAD_FOLDER, "acting.wav")
     acting_file.save(raw_act)
 
+    hf_token = os.environ.get("HF_TOKEN")
+    spaces = list(("Plachta/Seed-VC", "tonyassi/voice-clone"))
+    last_error = ""
+
     try:
         convert_to_wav(raw_act, act_wav, max_seconds=15)
-        client = Client("Plachta/Seed-VC")
-        result = client.predict(
-            handle_file(act_wav),
-            handle_file(vp_wav),
-            15,
-            1.0,
-            0.7,
-            True,
-            True,
-            0,
-            api_name="/predict"
-        )
-        
-        valid_files = list()
-        items = result if isinstance(result, (list, tuple)) else list((result,))
-        for item in items:
-            if isinstance(item, str) and os.path.exists(item):
-                valid_files.append(item)
-            elif isinstance(item, dict) and "path" in item and os.path.exists(item.get("path")):
-                valid_files.append(item.get("path"))
-
-        if not valid_files:
-            return jsonify({"error": "لم يرجع المحرك أي ملف صوتي"}), 500
-
-        # اختيار الملف الأكبر حجماً (المخرج الكامل وليس المعاينة الفارغة)
-        best_file = max(valid_files, key=lambda f: os.path.getsize(f))
-        final_mp3 = os.path.join(UPLOAD_FOLDER, "cloned_output.mp3")
-        convert_to_mp3(best_file, final_mp3)
-        
-        mp3_kb = round(os.path.getsize(final_mp3) / 1024, 1)
-        return jsonify({"status": "success", "size_kb": mp3_kb})
     except Exception as e:
-        return jsonify({"error": f"رد المحرك: {str(e)}"}), 503
+        return jsonify({"error": f"خطأ في تجهيز الصوت: {str(e)}"}), 500
+
+    for space_name in spaces:
+        try:
+            client = Client(space_name, token=hf_token)
+            if space_name == "Plachta/Seed-VC":
+                result = client.predict(
+                    handle_file(act_wav),
+                    handle_file(vp_wav),
+                    10,
+                    1.0,
+                    0.7,
+                    True,
+                    True,
+                    0,
+                    api_name="/predict"
+                )
+            else:
+                result = client.predict(
+                    handle_file(act_wav),
+                    handle_file(vp_wav),
+                    api_name="/predict"
+                )
+
+            valid_files = list()
+            items = result if isinstance(result, (list, tuple)) else list((result,))
+            for item in items:
+                if isinstance(item, str) and os.path.exists(item):
+                    valid_files.append(item)
+                elif isinstance(item, dict) and "path" in item and os.path.exists(item.get("path")):
+                    valid_files.append(item.get("path"))
+
+            if valid_files:
+                best_file = max(valid_files, key=lambda f: os.path.getsize(f))
+                final_mp3 = os.path.join(UPLOAD_FOLDER, "cloned_output.mp3")
+                convert_to_mp3(best_file, final_mp3)
+                mp3_kb = round(os.path.getsize(final_mp3) / 1024, 1)
+                return jsonify({"status": "success", "size_kb": mp3_kb})
+        except Exception as e:
+            last_error = str(e)
+            continue
+
+    return jsonify({"error": f"رد المحركات: {last_error}"}), 503
 
 @app.route("/get_audio")
 def get_audio():
@@ -110,6 +125,7 @@ def get_audio():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    
     
 
         
