@@ -10,7 +10,7 @@ UPLOAD_FOLDER = "temp_audio"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
 
-def convert_to_wav(input_path, output_path, max_seconds=12):
+def convert_to_wav(input_path, output_path, max_seconds=10):
     cmd = list((
         FFMPEG_PATH, "-y", "-i", input_path,
         "-t", str(max_seconds),
@@ -66,28 +66,28 @@ def clone_voice():
     acting_file.save(raw_act)
 
     try:
-        convert_to_wav(raw_act, act_wav, max_seconds=10)
+        convert_to_wav(raw_act, act_wav, max_seconds=8)
     except Exception as e:
         return jsonify({"error": f"خطأ في تجهيز الصوت: {str(e)}"}), 500
 
     hf_token = os.environ.get("HF_TOKEN")
-    # محاولة الاتصال بالمفتاح ثم بدون مفتاح على المحرك الرئيسي والنسخ الاحتياطية
-    attempts = list((
-        ("Plachta/Seed-VC", hf_token),
-        ("Plachta/Seed-VC", None),
-        ("amphion/maskgct", hf_token),
-        ("amphion/maskgct", None)
+    # قائمة محركات استنساخ الصوت إلى صوت (Zero-shot Voice Conversion)
+    spaces = list((
+        "Plachta/Seed-VC",
+        "myshell-ai/OpenVoiceV2",
+        "amphion/maskgct"
     ))
     last_error = ""
 
-    for space_name, tok in attempts:
+    for space_name in spaces:
         try:
-            client = Client(space_name, token=tok) if tok else Client(space_name)
-            if "Seed-VC" in space_name:
+            client = Client(space_name, token=hf_token) if hf_token else Client(space_name)
+            
+            if space_name == "Plachta/Seed-VC":
                 result = client.predict(
                     handle_file(act_wav),
                     handle_file(vp_wav),
-                    8,
+                    6,
                     1.0,
                     0.7,
                     True,
@@ -95,11 +95,22 @@ def clone_voice():
                     0,
                     api_name="/predict"
                 )
+            elif space_name == "myshell-ai/OpenVoiceV2":
+                # OpenVoiceV2 تحويل نبرة الصوت (Tone Color Converter)
+                result = client.predict(
+                    handle_file(act_wav),
+                    handle_file(vp_wav),
+                    api_name="/change_tone"
+                )
             else:
+                # البحث التلقائي عن أي مسار دالة متاح في المحرك الثالث
+                info = client.view_api(return_format="dict")
+                eps = list(info.get("named_endpoints", {}).keys())
+                target_ep = eps.pop(0) if eps else "/predict"
                 result = client.predict(
                     handle_file(vp_wav),
                     handle_file(act_wav),
-                    api_name="/voice_conversion"
+                    api_name=target_ep
                 )
 
             valid_files = list()
@@ -117,10 +128,10 @@ def clone_voice():
                 mp3_kb = round(os.path.getsize(final_mp3) / 1024, 1)
                 return jsonify({"status": "success", "size_kb": mp3_kb})
         except Exception as e:
-            last_error = str(e)
+            last_error = f"{space_name}: {str(e)}"
             continue
 
-    return jsonify({"error": f"تعذر الاستنساخ حالياً: {last_error[:140]}"}), 503
+    return jsonify({"error": f"المحركات مشغولة حالياً: {last_error[:150]}"}), 503
 
 @app.route("/get_audio")
 def get_audio():
@@ -131,6 +142,7 @@ def get_audio():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    
                 
     
 
