@@ -1,6 +1,6 @@
 flask
+gunicorn
 gradio_client
 imageio-ffmpeg
-gunicorn
+soundfile
 requests
-
