@@ -57,7 +57,7 @@ HTML_PAGE = '''<!DOCTYPE html>
         <audio id="resultAudio" controls></audio>
     </div>
 '''
-HTML_SCRIPT = '''
+      HTML_SCRIPT = '''
     <script>
         let mediaRecorder;
         let audioChunks = new Array();
@@ -146,7 +146,7 @@ HTML_SCRIPT = '''
 </body>
 </html>'''
 
-def convert_to_wav(input_path, output_path, max_seconds=25):
+def convert_to_wav(input_path, output_path, max_seconds=10):
     cmd = list((FFMPEG_PATH, "-y", "-i", input_path, "-t", str(max_seconds), "-ar", "22050", "-ac", "1", "-c:a", "pcm_s16le", output_path))
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
@@ -163,7 +163,7 @@ def save_voiceprint():
     wav_path = os.path.join(UPLOAD_FOLDER, "voiceprint.wav")
     file.save(raw_path)
     try:
-        convert_to_wav(raw_path, wav_path, max_seconds=15)
+        convert_to_wav(raw_path, wav_path, max_seconds=8)
         size_kb = round(os.path.getsize(wav_path) / 1024, 1)
         if size_kb < 5:
             return jsonify({"error": "التسجيل فارغ أو قصير جداً"}), 400
@@ -183,12 +183,12 @@ def clone_voice():
     acting_wav = os.path.join(UPLOAD_FOLDER, "acting.wav")
     acting_file.save(raw_acting)
     try:
-        convert_to_wav(raw_acting, acting_wav, max_seconds=25)
+        convert_to_wav(raw_acting, acting_wav, max_seconds=15)
         client = Client("Plachta/Seed-VC")
         result = client.predict(
             source=handle_file(acting_wav),
             target=handle_file(voiceprint_wav),
-            diffusion_steps=15,
+            diffusion_steps=10,
             length_adjust=1.0,
             inference_cfg_rate=0.7,
             f0_condition=True,
@@ -201,9 +201,9 @@ def clone_voice():
         shutil.copy(output_audio, final_output)
         return send_file(final_output, mimetype="audio/wav")
     except Exception as e:
-        return jsonify({"error": "المحركات مشغولة حالياً، انتظر 30 ثانية وأعد المحاولة"}), 503
+        return jsonify({"error": f"السبب التقني: {str(e)}"}), 503
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-        
+           
