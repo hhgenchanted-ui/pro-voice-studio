@@ -8,8 +8,9 @@ PAGE = '''<!DOCTYPE html>
         body { background: #0f172a; color: #f8fafc; font-family: sans-serif; padding: 16px; display: flex; flex-direction: column; align-items: center; }
         .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; width: 100%; max-width: 460px; margin-bottom: 16px; box-sizing: border-box; }
         h3 { margin-top: 0; font-size: 16px; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 10px; color: white; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 10px; color: white; text-decoration: none; display: block; text-align: center; box-sizing: border-box; }
         .btn-blue { background: #0284c7; }
+        .btn-green { background: #16a34a; }
         .btn-red { background: #dc2626; }
         .btn-gray { background: #475569; }
         .row { display: flex; gap: 10px; margin-top: 10px; }
@@ -41,7 +42,8 @@ PAGE = '''<!DOCTYPE html>
         <div id="actStatus" class="status"></div>
         <button class="btn btn-blue" onclick="cloneVoiceToVoice()">✨ استنساخ الصوت بنفس مشاعري</button>
         <div id="cloneStatus" class="status"></div>
-        <audio id="resultAudio" controls></audio>
+        <audio id="resultAudio" controls preload="metadata"></audio>
+        <a id="dlBtn" class="btn btn-green" href="/get_audio" download="cloned_voice.mp3" style="display:none;">⬇️ تحميل الصوت المستنسخ</a>
     </div>
     <script>
         let mediaRecorder, actingBlob = null;
@@ -96,23 +98,29 @@ PAGE = '''<!DOCTYPE html>
         async function cloneVoiceToVoice() {
             if (!actingBlob) return alert("سجّل صوتك التمثيلي أولاً");
             const status = document.getElementById('cloneStatus');
+            const dlBtn = document.getElementById('dlBtn');
+            dlBtn.style.display = "none";
             status.innerText = "⏳ جاري استنساخ الصوت ونقل المشاعر...";
             const fd = new FormData();
             fd.append("acting_audio", actingBlob, "acting.webm");
             try {
                 const res = await fetch("/clone_voice", { method: "POST", body: fd });
+                const data = await res.json();
                 if (!res.ok) {
-                    const err = await res.json();
-                    status.innerHTML = `<span class="error">❌ ${err.error}</span>`;
+                    status.innerHTML = `<span class="error">❌ ${data.error}</span>`;
                     return;
                 }
-                const audioBlob = await res.blob();
+                const audioUrl = "/get_audio?t=" + new Date().getTime();
                 const player = document.getElementById('resultAudio');
-                player.src = URL.createObjectURL(audioBlob);
+                player.src = audioUrl;
+                player.load();
                 player.play();
-                status.innerHTML = `<span class="success">✅ تم استنساخ الصوت بنجاح!</span>`;
+                dlBtn.href = audioUrl;
+                dlBtn.style.display = "block";
+                status.innerHTML = `<span class="success">✅ تم استنساخ الصوت بنجاح (${data.size_kb} KB)!</span>`;
             } catch (e) { status.innerHTML = `<span class="error">❌ خطأ: ${e.message}</span>`; }
         }
     </script>
 </body>
 </html>'''
+
