@@ -52,23 +52,21 @@ def clone_voice():
     try:
         convert_to_wav(raw_act, act_wav, max_seconds=15)
         client = Client("Plachta/Seed-VC")
-        # اكتشاف اسم دالة الاستنساخ تلقائياً في المحرك لمنع أخطاء api_name
-        info = client.view_api(return_format="dict")
-        endpoints = list(info.get("named_endpoints", {}).keys())
-        target_api = "/predict_1" if "/predict_1" in endpoints else (endpoints[0] if endpoints else "/predict")
-
+        
+        # تمرير المدخلات بالترتيب الصحيح الذي يطلبه محرك Seed-VC
         result = client.predict(
-            source=handle_file(act_wav),
-            target=handle_file(vp_wav),
-            diffusion_steps=10,
-            length_adjust=1.0,
-            inference_cfg_rate=0.7,
-            f0_condition=True,
-            auto_f0_adjust=True,
-            pitch_shift=0,
-            api_name=target_api
+            handle_file(act_wav),   # 1. الصوت التمثيلي (المصدر)
+            handle_file(vp_wav),    # 2. البصمة الصوتية (الهدف)
+            10,                     # 3. خطوات المعالجة (diffusion_steps)
+            1.0,                    # 4. ضبط السرعة (length_adjust)
+            0.7,                    # 5. دقة التشابه (inference_cfg_rate)
+            True,                   # 6. نقل المشاعر والنبرة (f0_condition)
+            True,                   # 7. ضبط طبقة الصوت تلقائياً (auto_f0_adjust)
+            0,                      # 8. إزاحة الطبقة (pitch_shift)
+            api_name="/predict"
         )
-        out_file = result[0] if isinstance(result, (list, tuple)) else result
+        
+        out_file = result if isinstance(result, (list, tuple)) else result
         final_out = os.path.join(UPLOAD_FOLDER, "cloned_output.wav")
         shutil.copy(out_file, final_out)
         return send_file(final_out, mimetype="audio/wav")
@@ -77,5 +75,6 @@ def clone_voice():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    
     
            
