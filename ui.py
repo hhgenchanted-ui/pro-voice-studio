@@ -40,6 +40,7 @@ PAGE = '''<!DOCTYPE html>
             <button class="btn btn-gray" id="stopActBtn" onclick="stopRec('act')" disabled>⏹️ إيقاف</button>
         </div>
         <div id="actStatus" class="status"></div>
+        <audio id="previewAudio" controls style="display:none;"></audio>
         <button class="btn btn-blue" onclick="cloneVoiceToVoice()">✨ استنساخ الصوت بنفس مشاعري</button>
         <div id="cloneStatus" class="status"></div>
         <audio id="resultAudio" controls preload="metadata"></audio>
@@ -61,7 +62,10 @@ PAGE = '''<!DOCTYPE html>
                     if (type === 'vp') await sendVoiceprintBlob(blob);
                     else {
                         actingBlob = blob;
-                        document.getElementById('actStatus').innerHTML = `<span class="success">✅ تم تسجيل الأداء (${Math.round(blob.size/1024)} KB)</span>`;
+                        const prev = document.getElementById('previewAudio');
+                        prev.src = URL.createObjectURL(blob);
+                        prev.style.display = "block";
+                        document.getElementById('actStatus').innerHTML = `<span class="success">✅ تم تسجيل الأداء (${Math.round(blob.size/1024)} KB) - اسمعه بالأسفل</span>`;
                     }
                 };
                 mediaRecorder.start();
@@ -123,4 +127,5 @@ PAGE = '''<!DOCTYPE html>
     </script>
 </body>
 </html>'''
+
 
