@@ -53,20 +53,29 @@ def clone_voice():
         convert_to_wav(raw_act, act_wav, max_seconds=15)
         client = Client("Plachta/Seed-VC")
         
-        # تمرير المدخلات بالترتيب الصحيح الذي يطلبه محرك Seed-VC
         result = client.predict(
-            handle_file(act_wav),   # 1. الصوت التمثيلي (المصدر)
-            handle_file(vp_wav),    # 2. البصمة الصوتية (الهدف)
-            10,                     # 3. خطوات المعالجة (diffusion_steps)
-            1.0,                    # 4. ضبط السرعة (length_adjust)
-            0.7,                    # 5. دقة التشابه (inference_cfg_rate)
-            True,                   # 6. نقل المشاعر والنبرة (f0_condition)
-            True,                   # 7. ضبط طبقة الصوت تلقائياً (auto_f0_adjust)
-            0,                      # 8. إزاحة الطبقة (pitch_shift)
+            handle_file(act_wav),
+            handle_file(vp_wav),
+            10,
+            1.0,
+            0.7,
+            True,
+            True,
+            0,
             api_name="/predict"
         )
         
-        out_file = result if isinstance(result, (list, tuple)) else result
+        out_file = None
+        if isinstance(result, (list, tuple)):
+            for item in result:
+                if isinstance(item, str) and os.path.exists(item):
+                    out_file = item
+        elif isinstance(result, str):
+            out_file = result
+
+        if not out_file:
+            return jsonify({"error": "لم يتم استلام ملف صوتي من المحرك"}), 500
+
         final_out = os.path.join(UPLOAD_FOLDER, "cloned_output.wav")
         shutil.copy(out_file, final_out)
         return send_file(final_out, mimetype="audio/wav")
@@ -75,6 +84,7 @@ def clone_voice():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+        
     
     
            
